@@ -1,0 +1,203 @@
+/* Blue Chat Room - Windows XP (Luna) look */
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;overflow:hidden;font:11px Tahoma,"Segoe UI",Verdana,sans-serif;color:#000;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+button,input,textarea{font-family:inherit}
+
+/* ---------- desktop ---------- */
+#desktop{position:fixed;left:0;top:0;right:0;bottom:30px;overflow:hidden;
+  background:
+   radial-gradient(ellipse 18% 9% at 22% 20%,rgba(255,255,255,.85),transparent 70%),
+   radial-gradient(ellipse 14% 7% at 30% 23%,rgba(255,255,255,.75),transparent 70%),
+   radial-gradient(ellipse 20% 8% at 72% 14%,rgba(255,255,255,.7),transparent 70%),
+   radial-gradient(ellipse 140% 55% at 25% 118%,#6bb82a 0,#4a9a16 48%,transparent 49%),
+   radial-gradient(ellipse 110% 45% at 95% 122%,#58a81c 0,#3c8410 52%,transparent 53%),
+   linear-gradient(#1f5fcf 0%,#4b8fe6 40%,#8dc0f2 62%,#cfe6fb 74%,#e8f4ff 78%)}
+.icon{position:absolute;width:78px;padding:4px 2px;text-align:center;color:#fff;text-shadow:1px 1px 2px #000;cursor:default;touch-action:none}
+.icon .glyph{font-size:34px;line-height:40px;filter:drop-shadow(1px 2px 2px rgba(0,0,0,.5))}
+.icon .label{display:inline-block;margin-top:2px;padding:1px 3px;line-height:13px}
+.icon.sel .label{background:#316ac5;text-shadow:none;outline:1px dotted #fff}
+.icon.sel .glyph{opacity:.75}
+
+/* ---------- windows ---------- */
+.win{position:absolute;display:flex;flex-direction:column;background:#0054e3;border:1px solid #0831d9;border-radius:8px 8px 0 0;
+  box-shadow:3px 3px 10px rgba(0,0,0,.55);min-width:200px;min-height:60px}
+.win.max{border-radius:0}
+.titlebar{height:29px;flex:none;display:flex;align-items:center;gap:5px;padding:0 4px 0 6px;color:#fff;border-radius:7px 7px 0 0;touch-action:none;cursor:default;
+  font:bold 13px "Trebuchet MS",Tahoma,sans-serif;text-shadow:1px 1px #0f1089;
+  background:linear-gradient(#0058ee 0%,#3593ff 4%,#288eff 6%,#127dff 8%,#036ffc 10%,#0262ee 14%,#0057e5 20%,#0054e3 24%,#0055eb 56%,#005bf5 66%,#026afe 76%,#0062ef 86%,#0052d6 92%,#0040ab 94%,#003092 100%)}
+.win.max .titlebar{border-radius:0}
+.ticon{font-size:14px;text-shadow:none}
+.ttext{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tbtns{display:flex;gap:2px}
+.tb{width:21px;height:21px;padding:0;border:1px solid #fff;border-radius:3px;position:relative;cursor:pointer;
+  background:linear-gradient(135deg,#7aa9ff 0%,#2e6bea 45%,#1a4fd0 100%);box-shadow:inset 0 0 2px rgba(255,255,255,.6)}
+.tb:hover{filter:brightness(1.12)}
+.tb.close{background:linear-gradient(135deg,#f3ae98 0%,#e0603f 45%,#c23a1c 100%)}
+.tb::before,.tb::after{content:"";position:absolute}
+.tb.min::before{left:4px;bottom:4px;width:8px;height:3px;background:#fff}
+.tb.max::before{left:4px;top:3px;width:11px;height:11px;border:1px solid #fff;border-top-width:3px}
+.win.max .tb.max::before{left:3px;top:6px;width:8px;height:8px;border-top-width:2px}
+.win.max .tb.max::after{left:6px;top:3px;width:8px;height:8px;border:1px solid #fff;border-top-width:2px;border-left:0;border-bottom:0}
+.tb.close::before,.tb.close::after{left:3px;top:8px;width:13px;height:3px;background:#fff;transform:rotate(45deg)}
+.tb.close::after{transform:rotate(-45deg)}
+.win.inactive{background:#6e8fe0;border-color:#7a96df;box-shadow:2px 2px 6px rgba(0,0,0,.4)}
+.win.inactive .titlebar{background:linear-gradient(#7697e7 0%,#7e9ee3 4%,#94afe8 8%,#8aa6e5 20%,#7b97e0 56%,#7e9ee3 76%,#6d8cd8 92%,#5a78c4 100%);text-shadow:1px 1px #4c5e9a}
+.win.inactive .tb{background:linear-gradient(135deg,#a8bff0,#7794dd);opacity:.9}
+.wbody{position:relative;flex:1;min-height:0;margin:0 3px 3px;background:#ece9d8;overflow:hidden}
+.fill{position:absolute;inset:0;display:flex;flex-direction:column;min-height:0}
+.grip{position:absolute;right:0;bottom:0;width:16px;height:16px;cursor:nwse-resize;touch-action:none;z-index:5;
+  background:linear-gradient(135deg,transparent 0 50%,#a9a79a 50% 56%,transparent 56% 66%,#a9a79a 66% 72%,transparent 72% 82%,#a9a79a 82% 88%,transparent 88%)}
+.win.max .grip{display:none}
+
+/* ---------- controls ---------- */
+.xp-btn{min-width:75px;padding:3px 10px;border:1px solid #003c74;border-radius:3px;cursor:pointer;color:#000;font-size:11px;
+  background:linear-gradient(#fff 0%,#ecebe5 86%,#d8d0c4 100%)}
+.xp-btn:hover{box-shadow:inset 0 0 0 2px #f8b330}
+.xp-btn:active{background:linear-gradient(#cdcac3,#e3e3db)}
+.xp-btn:disabled{color:#9a9a9a;border-color:#a0a0a0;box-shadow:none;cursor:default}
+.xp-btn.small{min-width:0;padding:2px 8px}
+.xp-input{border:1px solid #7f9db9;background:#fff;padding:3px 4px;font-size:12px;-webkit-user-select:text;user-select:text;border-radius:0}
+.xp-input:focus{outline:none;border-color:#316ac5}
+.toolbar{display:flex;flex-wrap:wrap;gap:4px;padding:4px;border-bottom:1px solid #c4bfa9;background:linear-gradient(#f9f8f3,#e4e1d2);align-items:center}
+.toolbar .grow{flex:1}
+.statusbar{display:flex;gap:2px;padding:2px 3px;border-top:1px solid #aca899;background:#ece9d8;flex:none}
+.sb-cell{padding:1px 8px;border:1px solid;border-color:#aca899 #fff #fff #aca899;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-cell.grow{flex:1}
+
+/* ---------- chat ---------- */
+.chatlog{flex:1;min-height:0;overflow:auto;background:#fff;border:1px solid #7f9db9;margin:4px 4px 0;padding:6px 8px;font-size:12px;-webkit-user-select:text;user-select:text}
+.msg{margin:0 0 7px;line-height:1.4;overflow-wrap:anywhere}
+.msg .t{color:#808080;font-size:10px;margin-right:5px}
+.msg .n{font-weight:bold;color:#0a3fb5}
+.msg.mine .n{color:#b23b00}
+.msg .x{white-space:pre-wrap}
+.msg a{color:#0000ee}
+.att{display:block;width:fit-content;max-width:100%;margin:4px 0 0 10px;padding:4px 6px;border:1px solid #c3d3ea;background:#f3f7ff;border-radius:3px}
+.att .cap{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:11px;color:#333}
+.att .fname{font-weight:bold;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.att .thumb{display:block;max-width:260px;max-height:170px;border:1px solid #888;cursor:zoom-in;margin-bottom:3px;background:#eee}
+.att .ficon{font-size:18px}
+.att.row{display:flex;gap:8px;align-items:center}
+.pending{display:flex;flex-wrap:wrap;gap:4px;padding:4px 4px 0}
+.pending:empty{display:none}
+.chip{display:flex;align-items:center;gap:4px;max-width:220px;padding:2px 4px;border:1px solid #7f9db9;background:#fff;border-radius:3px}
+.chip img{width:22px;height:22px;object-fit:cover}
+.chip .cn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip button{border:0;background:transparent;cursor:pointer;color:#a00;font-weight:bold;padding:0 2px}
+.progress{height:0;overflow:hidden;margin:0 4px}
+.progress.on{height:13px;margin:4px 4px 0;border:1px solid #686868;background:#fff;padding:1px}
+.progress .bar{height:100%;width:0;background:repeating-linear-gradient(90deg,#2ec22e 0 7px,#fff 7px 9px)}
+.composer{display:flex;gap:4px;padding:4px}
+.composer textarea{flex:1;resize:none;font-size:12px;min-width:0}
+.cbtns{display:flex;flex-direction:column;gap:3px}
+.cbtns .xp-btn{min-width:78px}
+.chat.drop .chatlog{background:#eaf3ff;outline:2px dashed #316ac5;outline-offset:-4px}
+
+/* ---------- dialogs ---------- */
+.msgbox{padding:14px 14px 10px;justify-content:space-between}
+.mb-row{display:flex;gap:12px;align-items:flex-start}
+.mb-icon{font-size:30px;line-height:32px}
+.mb-text{font-size:12px;line-height:1.4;padding-top:4px;-webkit-user-select:text;user-select:text}
+.mb-btns{display:flex;gap:8px;justify-content:center;margin-top:10px}
+.login-banner{height:60px;flex:none;padding:8px 14px;color:#fff;background:linear-gradient(90deg,#00309c,#2b6fdc 60%,#6aa4f5);border-bottom:2px solid #f89b2a}
+.lb-title{font:italic bold 22px "Trebuchet MS",Tahoma;text-shadow:2px 2px 2px #002070}
+.lb-sub{opacity:.9}
+.login-body{padding:14px;display:flex;flex-direction:column;gap:8px;font-size:12px}
+
+/* ---------- image viewer ---------- */
+.imgview{position:relative;flex:1;min-height:0;overflow:auto;background:#dfe6f3;border:1px solid #7f9db9;margin:0}
+.imgview img{display:block;margin:auto}
+.imgview.fit{overflow:hidden}
+.imgview.fit img{position:absolute;inset:0;margin:auto;max-width:100%;max-height:100%}
+
+/* ---------- explorer ---------- */
+.addr{display:flex;gap:6px;align-items:center;padding:3px 4px;border-bottom:1px solid #c4bfa9}
+.addr .box{flex:1;background:#fff;border:1px solid #7f9db9;padding:2px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.flist{flex:1;min-height:0;overflow:auto;background:#fff;border:1px solid #7f9db9;margin:0 3px}
+.flist table{width:100%;border-collapse:collapse}
+.flist th{position:sticky;top:0;text-align:left;font-weight:normal;padding:2px 6px;background:linear-gradient(#fff,#ece9d8);border:1px solid;border-color:#fff #aca899 #aca899 #fff}
+.flist td{padding:2px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:230px}
+.flist tr.sel td{background:#316ac5;color:#fff}
+.flist .empty{padding:20px;color:#777}
+
+/* ---------- Windows Media Player 9 ---------- */
+.wmp{background:linear-gradient(#1d4296,#0b1b49 55%,#050c26);color:#cfe3ff}
+.wmp-top{display:flex;gap:3px;padding:5px 8px 0;flex:none;background:linear-gradient(#d6e0f3,#98aed8 55%,#6f89c0);border-bottom:1px solid #1c2b5c}
+.wmp-brand{margin-left:auto;font:italic bold 12px "Trebuchet MS",Tahoma;color:#14307a;padding:3px 4px}
+.wmp-tab{padding:3px 12px;border:1px solid #4d68a0;border-bottom:0;border-radius:6px 6px 0 0;font-weight:bold;font-size:11px;color:#122c68;cursor:pointer;background:linear-gradient(#e9effb,#b8c9ea)}
+.wmp-tab.on{background:linear-gradient(#fff,#d9e4f8)}
+.wmp-main{flex:1;min-height:0;display:flex;gap:6px;padding:7px}
+.wmp-view{position:relative;flex:1;min-width:0;background:#000;border:2px solid;border-color:#7088bb #19285a #19285a #7088bb;overflow:hidden}
+.wmp-view canvas{display:block;width:100%;height:100%}
+.wmp-title{position:absolute;left:8px;top:6px;right:8px;font:bold 12px "Trebuchet MS",Tahoma;color:#9ad6ff;text-shadow:0 0 6px #1d79d8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.wmp-msg{position:absolute;left:10px;right:10px;bottom:10px;color:#ffd27a;font-size:11px;text-align:center}
+.wmp-list{width:175px;flex:none;overflow:auto;background:#09132f;border:1px solid #3f5da3}
+.wmp-list.hide{display:none}
+.wmp-list .row{padding:3px 7px;color:#b9d2ff;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wmp-list .row:hover{background:#17306e}
+.wmp-list .row.on{background:#2a5cd0;color:#fff}
+.wmp-list .none{padding:10px;color:#7f98cc}
+.wmp-seek{padding:0 12px;flex:none}
+.wmp-ctrl{flex:none;display:flex;align-items:center;gap:6px;padding:6px 10px 8px;border-top:1px solid #86a6ee;background:linear-gradient(#3d63b9,#1b387f 45%,#0c2058)}
+.rb{width:28px;height:28px;padding:0;border-radius:50%;border:1px solid #08205c;cursor:pointer;color:#0a2a70;font-size:11px;font-weight:bold;line-height:1;
+  background:radial-gradient(circle at 35% 28%,#fff 0,#c3dbff 20%,#5b92ea 58%,#173f98 100%);box-shadow:0 1px 2px rgba(0,0,0,.6)}
+.rb:hover{filter:brightness(1.15)}
+.rb:active{filter:brightness(.9)}
+.rb.big{width:40px;height:40px;font-size:14px}
+.lcd{margin-left:auto;background:#000;color:#6fd3ff;font:12px "Lucida Console",Consolas,monospace;border:1px solid #5a73ad;padding:4px 8px;white-space:nowrap}
+.wmp input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:16px;background:transparent;margin:0}
+.wmp input[type=range].vol{width:72px;flex:none}
+.wmp input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;border:1px solid #7a98da;background:linear-gradient(#071030,#2c4c9c)}
+.wmp input[type=range]::-moz-range-track{height:6px;border-radius:3px;border:1px solid #7a98da;background:linear-gradient(#071030,#2c4c9c)}
+.wmp input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;margin-top:-6px;border-radius:50%;border:1px solid #0a2a7a;background:radial-gradient(circle at 35% 30%,#fff,#a5c8ff 40%,#2a62d6)}
+.wmp input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;border:1px solid #0a2a7a;background:radial-gradient(circle at 35% 30%,#fff,#a5c8ff 40%,#2a62d6)}
+.wmp-status{flex:none;padding:3px 9px;font-size:11px;color:#9db8ea;background:#08122f;border-top:1px solid #2d4b92;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ---------- taskbar / start ---------- */
+#taskbar{position:fixed;left:0;right:0;bottom:0;height:30px;z-index:100000;display:flex;align-items:stretch;border-top:1px solid #0c3fb8;
+  background:linear-gradient(#3168d5 0%,#4993e6 3%,#2157d7 6%,#245edb 50%,#2157d7 90%,#1941a5 100%)}
+#start{display:flex;align-items:center;gap:6px;padding:0 18px 0 10px;border:0;border-radius:0 12px 12px 0;cursor:pointer;color:#fff;
+  font:italic bold 18px "Trebuchet MS",Tahoma,sans-serif;text-shadow:1px 1px 2px #1b4c10;
+  background:linear-gradient(#5db452 0%,#3f9f35 14%,#2f8c27 50%,#2a7c22 88%,#1f6119 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12),2px 0 4px rgba(0,0,0,.35)}
+#start:hover{filter:brightness(1.1)}
+#start.open{filter:brightness(.88)}
+.flag{display:grid;grid-template-columns:1fr 1fr;gap:1px;width:16px;height:16px;transform:skewX(-6deg) rotate(-4deg)}
+.flag i{display:block}
+.flag i:nth-child(1){background:#f35325}.flag i:nth-child(2){background:#81bc06}.flag i:nth-child(3){background:#05a6f0}.flag i:nth-child(4){background:#ffba08}
+#tasks{flex:1;display:flex;gap:3px;padding:2px 6px;overflow:hidden;min-width:0}
+.task{flex:0 1 165px;min-width:40px;text-align:left;padding:0 8px;color:#fff;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;
+  border:1px solid #1e52b7;border-radius:3px;background:linear-gradient(#5b97f5,#3c81f3 40%,#3178ea)}
+.task:hover{filter:brightness(1.1)}
+.task.active{background:#1e52b7;box-shadow:inset 1px 1px 3px rgba(0,0,0,.55)}
+.task.flash{animation:flash 1s steps(1) infinite}
+@keyframes flash{50%{background:#f7a728;border-color:#c07410;color:#000}}
+#tray{display:flex;align-items:center;gap:10px;padding:0 12px;color:#fff;border-left:1px solid #0a4aa8;
+  background:linear-gradient(#12a0ef 0%,#18b5f2 8%,#139ee9 50%,#0e8ad8 90%,#0a6fc0 100%);box-shadow:inset 1px 0 1px #1ec6ff}
+#tray span{white-space:nowrap}
+#startmenu{display:none;position:fixed;left:0;bottom:30px;width:min(390px,100vw);z-index:99999;border:1px solid #0b3fbd;border-radius:8px 8px 0 0;overflow:hidden;background:#fff;box-shadow:3px -3px 10px rgba(0,0,0,.5)}
+.sm-head{display:flex;align-items:center;gap:10px;padding:8px 10px;color:#fff;font:bold 15px "Trebuchet MS",Tahoma;text-shadow:1px 1px 2px #000;background:linear-gradient(#1a5fd9,#3f8af0 50%,#1a5fd9)}
+.sm-avatar{display:grid;place-items:center;width:40px;height:40px;font-size:26px;border:2px solid #fff;border-radius:5px;background:#dbe8ff;text-shadow:none}
+.sm-cols{display:grid;grid-template-columns:1.15fr 1fr;border-top:2px solid #f89b2a}
+.sm-left{background:#fff;padding:6px 0}
+.sm-right{background:#d3e5fa;padding:6px 0;border-left:1px solid #95bdee}
+.sm-item{display:flex;align-items:center;gap:9px;padding:7px 10px;font-size:12px;cursor:pointer}
+.sm-item span{font-size:22px;width:28px;text-align:center}
+.sm-item:hover{background:#316ac5;color:#fff}
+.sm-foot{display:flex;justify-content:flex-end;padding:5px 8px;background:linear-gradient(#4a84e8,#2158c8)}
+.sm-foot button{border:0;background:transparent;color:#fff;font-size:12px;cursor:pointer;padding:3px 8px}
+.sm-foot button:hover{background:rgba(255,255,255,.2);border-radius:3px}
+
+/* ---------- balloon ---------- */
+#balloon{display:none;position:fixed;right:14px;bottom:38px;width:270px;z-index:99998;padding:8px 11px 10px;cursor:pointer;
+  background:#ffffe1;border:1px solid #000;border-radius:7px;box-shadow:2px 2px 5px rgba(0,0,0,.45);font-size:11px}
+#balloon::after{content:"";position:absolute;right:30px;bottom:-9px;border:8px solid transparent;border-top-color:#000;border-bottom:0}
+#balloon::before{content:"";position:absolute;right:31px;bottom:-7px;border:7px solid transparent;border-top-color:#ffffe1;border-bottom:0;z-index:1}
+.b-title{display:flex;justify-content:space-between;font-weight:bold;margin-bottom:4px}
+.b-x{padding:0 4px;color:#444}
+.b-text{max-height:60px;overflow:hidden;overflow-wrap:anywhere;white-space:pre-wrap}
+
+@media (max-width:640px){
+  .icon{width:66px}
+  .wmp-list{width:120px}
+  #tray #tray-users{display:none}
+}

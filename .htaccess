@@ -1,0 +1,22 @@
+# Raise PHP upload limits (Apache + mod_php). For PHP-FPM/CGI see .user.ini
+<IfModule mod_php.c>
+  php_value upload_max_filesize 25M
+  php_value post_max_size 130M
+  php_value max_file_uploads 5
+</IfModule>
+<IfModule mod_php7.c>
+  php_value upload_max_filesize 25M
+  php_value post_max_size 130M
+  php_value max_file_uploads 5
+</IfModule>
+
+# Never serve the JSON message store directly
+<FilesMatch "\.(json)$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+</FilesMatch>
+
+# Audio MIME types
+AddType audio/mpeg .mp3 .mp2
+AddType audio/wav .wav
