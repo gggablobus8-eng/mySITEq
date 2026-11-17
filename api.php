@@ -17,6 +17,7 @@ const MAX_NAME       = 20;
 const KEEP_MESSAGES  = 300;               // older messages (and their files) are pruned
 const RATE_COUNT     = 6;                 // max posts per IP ...
 const RATE_WINDOW    = 10;                // ... in this many seconds
+const KEEP_DELS      = 300;               // deletion notices kept so other browsers can catch up
 
 // extension => [kind, mime]. Anything not listed is rejected. No SVG/HTML/PHP on purpose.
 const TYPES = [
@@ -25,7 +26,8 @@ const TYPES = [
     'webp' => ['image', 'image/webp'], 'bmp'  => ['image', 'image/bmp'],
     'mp3'  => ['audio', 'audio/mpeg'], 'mp2'  => ['audio', 'audio/mpeg'],
     'wav'  => ['audio', 'audio/wav'],  'ogg'  => ['audio', 'audio/ogg'],
-    'm4a'  => ['audio', 'audio/mp4'],
+    'm4a'  => ['audio', 'audio/mp4'],  'mp1'  => ['audio', 'audio/mpeg'],
+    'flac' => ['audio', 'audio/flac'],
     'txt'  => ['file', 'text/plain'],  'pdf'  => ['file', 'application/pdf'],
     'zip'  => ['file', 'application/zip'], '7z' => ['file', 'application/x-7z-compressed'],
     'rar'  => ['file', 'application/vnd.rar'],
@@ -115,9 +117,11 @@ function store_read($fh): array {
     $raw = stream_get_contents($fh);
     $d = $raw ? json_decode($raw, true) : null;
     if (!is_array($d) || !isset($d['messages']) || !is_array($d['messages'])) {
-        $d = ['next' => 1, 'messages' => []];
+        $d = ['next' => 1, 'messages' => [], 'dseq' => 0, 'dels' => []];
     }
     if (!isset($d['next'])) $d['next'] = 1;
+    if (!isset($d['dseq'])) $d['dseq'] = 0;
+    if (!isset($d['dels']) || !is_array($d['dels'])) $d['dels'] = [];
     return $d;
 }
 
@@ -129,8 +133,18 @@ function store_write($fh, array $d): void {
 }
 
 function public_msg(array $m): array {
-    unset($m['h']);
+    unset($m['h'], $m['k']);
     return $m;
+}
+
+function add_del(array &$d, int $id, ?string $file): void {
+    $d['dseq'] = (int)$d['dseq'] + 1;
+    $d['dels'][] = [$d['dseq'], $id, $file];
+    if (count($d['dels']) > KEEP_DELS) $d['dels'] = array_slice($d['dels'], -KEEP_DELS);
+}
+
+function unlink_upload(string $dir, string $id): void {
+    if (preg_match('/^[a-f0-9]{24}\.[a-z0-9]{2,4}$/', $id)) @unlink($dir . '/' . $id);
 }
 
 function presence(string $file, string $cid, string $name): array {
@@ -187,7 +201,9 @@ if ($action === 'fetch') {
     fclose($fh);
 
     $msgs = $d['messages'];
-    $last = $msgs ? (int)end($msgs)['id'] : 0;
+    $last = (int)$d['next'] - 1;
+    $ds   = (int)($_GET['ds'] ?? 0);
+    $dels = array_values(array_filter($d['dels'], fn($x) => (int)$x[0] > $ds));
     if ($since <= 0) {
         $msgs = array_slice($msgs, -100);
     } else {
@@ -197,6 +213,8 @@ if ($action === 'fetch') {
     out([
         'ok'       => true,
         'last'     => $last,
+        'dseq'     => (int)$d['dseq'],
+        'dels'     => $dels,
         'messages' => array_map('public_msg', array_values($msgs)),
         'users'    => presence($PRES, $cid, $name),
         'config'   => ['maxFile' => max_file_bytes(), 'maxFiles' => MAX_FILES, 'exts' => array_keys(TYPES)],
@@ -268,23 +286,66 @@ if ($action === 'post') {
         $saved[] = ['id' => $id, 'name' => $p['name'], 'size' => $p['size'], 'kind' => $p['kind'], 'mime' => $p['mime']];
     }
 
-    $msg = ['id' => (int)$d['next'], 'time' => $now, 'name' => $name, 'text' => $text, 'files' => $saved, 'c' => $cid, 'h' => $h];
+    $token = bin2hex(random_bytes(16));
+    $msg = ['id' => (int)$d['next'], 'time' => $now, 'name' => $name, 'text' => $text, 'files' => $saved, 'c' => $cid, 'h' => $h, 'k' => hash('sha256', $token)];
     $d['messages'][] = $msg;
     $d['next'] = $msg['id'] + 1;
 
     if (count($d['messages']) > KEEP_MESSAGES) {
         $drop = array_splice($d['messages'], 0, count($d['messages']) - KEEP_MESSAGES);
         foreach ($drop as $old) {
-            foreach (($old['files'] ?? []) as $of) {
-                if (preg_match('/^[a-f0-9]{24}\.[a-z0-9]{2,4}$/', (string)$of['id'])) @unlink($UPLOAD . '/' . $of['id']);
-            }
+            foreach (($old['files'] ?? []) as $of) unlink_upload($UPLOAD, (string)$of['id']);
+            add_del($d, (int)$old['id'], null);
         }
     }
 
     store_write($fh, $d);
     flock($fh, LOCK_UN);
     fclose($fh);
-    out(['ok' => true, 'message' => public_msg($msg)]);
+    out(['ok' => true, 'message' => public_msg($msg), 'token' => $token]);
+}
+
+if ($action === 'delete') {
+    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('POST required.', 405);
+    $id    = (int)($_POST['id'] ?? 0);
+    $token = (string)($_POST['token'] ?? '');
+    $file  = (string)($_POST['file'] ?? '');
+    if ($id <= 0 || $token === '') fail('Missing delete information.');
+
+    $fh = store_open($STORE, LOCK_EX);
+    $d = store_read($fh);
+    $idx = null;
+    foreach ($d['messages'] as $i => $m) { if ((int)$m['id'] === $id) { $idx = $i; break; } }
+    if ($idx === null) { flock($fh, LOCK_UN); fclose($fh); fail('That message no longer exists.', 404); }
+    $m = $d['messages'][$idx];
+    if (empty($m['k']) || !hash_equals((string)$m['k'], hash('sha256', $token))) {
+        flock($fh, LOCK_UN); fclose($fh);
+        fail('You can only delete things you posted from this browser.', 403);
+    }
+
+    if ($file !== '') {
+        $keep = [];
+        $found = false;
+        foreach (($m['files'] ?? []) as $f) {
+            if ((string)$f['id'] === $file) { unlink_upload($UPLOAD, $file); $found = true; } else { $keep[] = $f; }
+        }
+        if (!$found) { flock($fh, LOCK_UN); fclose($fh); fail('File not found.', 404); }
+        add_del($d, $id, $file);
+        if ($keep || $m['text'] !== '') {
+            $d['messages'][$idx]['files'] = $keep;
+        } else {
+            array_splice($d['messages'], $idx, 1);
+            add_del($d, $id, null);
+        }
+    } else {
+        foreach (($m['files'] ?? []) as $f) unlink_upload($UPLOAD, (string)$f['id']);
+        array_splice($d['messages'], $idx, 1);
+        add_del($d, $id, null);
+    }
+    store_write($fh, $d);
+    flock($fh, LOCK_UN);
+    fclose($fh);
+    out(['ok' => true]);
 }
 
 if ($action === 'file') {

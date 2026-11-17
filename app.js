@@ -37,7 +37,8 @@ const state = {
   cid: store('bcr_cid') || (() => { const c = randomId(); store('bcr_cid', c); return c; })(),
   sound: store('bcr_sound') !== '0',
   lastId: 0, messages: [], seen: new Set(), loaded: false, stick: true,
-  pending: [], uploading: false, unread: 0,
+  pending: [], uploading: false, unread: 0, dseq: 0,
+  tokens: (() => { try { return JSON.parse(store('bcr_tokens') || '{}') || {}; } catch (e) { return {}; } })(),
   config: { maxFile: 25 * 1048576, maxFiles: 5, exts: [] },
 };
 
@@ -189,6 +190,60 @@ function msgBox(title, text, icon = 'ℹ️') {
   ok.focus();
 }
 
+function confirmBox(title, text, onYes, yesLabel = 'Yes') {
+  const yes = h('button', { class: 'xp-btn' }, yesLabel), no = h('button', { class: 'xp-btn' }, 'No');
+  const content = h('div', { class: 'fill msgbox' },
+    h('div', { class: 'mb-row' }, h('span', { class: 'mb-icon' }, '❓'), h('div', { class: 'mb-text' }, text)),
+    h('div', { class: 'mb-btns' }, yes, no));
+  const win = createWindow({ title, icon: '💬', w: 360, h: 170, dialog: true, center: true, content, noTask: true });
+  yes.addEventListener('click', () => { closeWin(win); onYes(); });
+  no.addEventListener('click', () => closeWin(win));
+  no.focus();
+}
+
+function saveTokens() {
+  const ids = Object.keys(state.tokens).map(Number).sort((a, b) => b - a).slice(0, 400);
+  const keep = {};
+  ids.forEach(i => { keep[i] = state.tokens[i]; });
+  state.tokens = keep;
+  store('bcr_tokens', JSON.stringify(keep));
+}
+const owns = id => !!state.tokens[id];
+
+function askDelete(m, f) {
+  const what = f ? `the file "${f.name}"` : 'this message' + ((m.files || []).length ? ' and its attached files' : '');
+  confirmBox('Confirm Delete', `Are you sure you want to delete ${what}? This removes it for everyone.`, () => deleteMsg(m.id, f && f.id), 'Delete');
+}
+function deleteMsg(id, fileId) {
+  const fd = new FormData();
+  fd.append('id', id); fd.append('token', state.tokens[id] || '');
+  if (fileId) fd.append('file', fileId);
+  fetch(API + '?action=delete', { method: 'POST', body: fd })
+    .then(r => r.json().catch(() => null))
+    .then(d => {
+      if (d && d.ok) applyDeletes([[0, id, fileId || null]]);
+      else if (d && /no longer exists/.test(d.error || '')) applyDeletes([[0, id, null]]);
+      else msgBox('Delete failed', (d && d.error) || 'The server did not accept the request.', '⛔');
+    })
+    .catch(() => msgBox('Delete failed', 'Could not reach the server.', '⛔'));
+}
+function applyDeletes(list) {
+  for (const [, id, fid] of list) {
+    const m = state.messages.find(x => x.id === id);
+    const el = chat.log ? chat.log.querySelector(`[data-mid="${id}"]`) : null;
+    if (fid && m) {
+      m.files = (m.files || []).filter(f => f.id !== fid);
+      if (!m.text && !m.files.length) { state.messages = state.messages.filter(x => x.id !== id); delete state.tokens[id]; if (el) el.remove(); }
+      else if (el) el.replaceWith(buildMsg(m));
+    } else if (!fid) {
+      state.messages = state.messages.filter(x => x.id !== id);
+      delete state.tokens[id];
+      if (el) el.remove();
+    }
+  }
+  saveTokens(); refreshExplorer(); refreshPlayerList();
+}
+
 /* =====================================================================
    Sound + notifications
    ===================================================================== */
@@ -253,29 +308,34 @@ function linkify(text) {
   return frag;
 }
 
-function buildAttachment(f) {
+function buildAttachment(f, m) {
   const dl = h('a', { href: fileUrl(f, true), download: f.name, onclick: e => e.stopPropagation() }, 'Download');
+  const del = owns(m.id) ? h('a', { href: '#', class: 'del', title: 'Delete this file', onclick: e => { e.preventDefault(); askDelete(m, f); } }, 'Delete') : null;
+  const size = `(${fmtSize(f.size)})`;
+  const name = h('span', { class: 'fname', title: f.name }, f.name);
   if (f.kind === 'image') {
     const img = h('img', { class: 'thumb', src: fileUrl(f), alt: f.name, loading: 'lazy', title: 'Click to preview', draggable: 'false' });
     img.addEventListener('click', () => openImage(f));
     img.addEventListener('load', () => { if (state.stick) scrollDown(); });
-    return h('div', { class: 'att' }, img, h('div', { class: 'cap' }, h('span', { class: 'fname', title: f.name }, f.name), `(${fmtSize(f.size)})`, dl));
+    return h('div', { class: 'att' }, img, h('div', { class: 'cap' }, name, size, dl, del));
   }
   if (f.kind === 'audio') {
     return h('div', { class: 'att row' }, h('span', { class: 'ficon' }, '🎵'),
-      h('div', { class: 'cap' }, h('span', { class: 'fname', title: f.name }, f.name), `(${fmtSize(f.size)})`,
-        h('button', { class: 'xp-btn small', onclick: () => openPlayer(f) }, '▶ Play'), dl));
+      h('div', { class: 'cap' }, name, size, h('button', { class: 'xp-btn small', onclick: () => openPlayer(f) }, '▶ Play'), dl, del));
   }
+  const arc = ['zip', 'rar'].includes(extOf(f.name))
+    ? h('button', { class: 'xp-btn small', onclick: () => openApp('archive', f) }, '📚 Preview') : null;
   return h('div', { class: 'att row' }, h('span', { class: 'ficon' }, kindIcon(f)),
-    h('div', { class: 'cap' }, h('span', { class: 'fname', title: f.name }, f.name), `(${fmtSize(f.size)})`, dl));
+    h('div', { class: 'cap' }, name, size, arc, dl, del));
 }
 
 function buildMsg(m) {
-  const d = h('div', { class: 'msg' + (m.c && m.c === state.cid ? ' mine' : '') },
+  const d = h('div', { class: 'msg' + (m.c && m.c === state.cid ? ' mine' : ''), 'data-mid': m.id },
     h('span', { class: 't' }, '[' + fmtClock(m.time) + ']'),
     h('span', { class: 'n' }, m.name + ':'), ' ');
   if (m.text) d.append(h('span', { class: 'x' }, linkify(m.text)));
-  for (const f of (m.files || [])) d.append(buildAttachment(f));
+  if (owns(m.id)) d.append(' ', h('a', { href: '#', class: 'del', title: 'Delete this message', onclick: e => { e.preventDefault(); askDelete(m); } }, '[Delete]'));
+  for (const f of (m.files || [])) d.append(buildAttachment(f, m));
   return d;
 }
 function scrollDown() { if (chat.log) chat.log.scrollTop = chat.log.scrollHeight; }
@@ -330,6 +390,7 @@ function sendMessage() {
     let d = null; try { d = JSON.parse(xhr.responseText); } catch (e) {}
     if (xhr.status === 200 && d && d.ok) {
       if (chat.input) { chat.input.value = ''; chat.input.focus(); }
+      if (d.token) { state.tokens[d.message.id] = d.token; saveTokens(); }
       clearPending(); state.stick = true; ingest([d.message]); scrollDown();
     } else {
       msgBox('Message not sent', (d && d.error) || `Server error (${xhr.status}).`, '⛔');
@@ -438,48 +499,33 @@ function openImage(f) {
 }
 
 /* =====================================================================
-   Shared files (explorer)
+   Hooks into the optional modules (explorer.js, archive.js, ...)
    ===================================================================== */
-const expl = { body: null, status: null, sel: null };
-function openExplorer() {
-  if (wins.has('explorer')) { const w = wins.get('explorer'); if (w.min) restoreWin(w); else focusWin(w); return; }
-  const open = h('button', { class: 'xp-btn small' }, '📂 Open');
-  const dl = h('button', { class: 'xp-btn small' }, '💾 Download');
-  const body = h('div', { class: 'flist' });
-  const status = h('div', { class: 'statusbar' }, h('span', { class: 'sb-cell grow' }, ''));
-  const content = h('div', { class: 'fill' }, h('div', { class: 'toolbar' }, open, dl),
-    h('div', { class: 'addr' }, h('span', null, 'Address'), h('div', { class: 'box' }, '📁 My Network Places\\Blue Chat Room\\Shared Files')),
-    body, status);
-  Object.assign(expl, { body, status, sel: null });
-  open.addEventListener('click', () => { const f = allFiles().find(x => x.id === expl.sel); if (f) openFile(f); });
-  dl.addEventListener('click', () => { const f = allFiles().find(x => x.id === expl.sel); if (f) download(f); });
-  const ds = deskSize();
-  createWindow({ id: 'explorer', title: 'Shared Files', icon: '📁', content, w: 560, h: 340, minW: 320, minH: 200, x: ds.w > 800 ? 220 : 10, y: 120,
-    onClose: () => { expl.body = null; } });
-  refreshExplorer();
+function openApp(name, ...a) {
+  const app = window.BCR && window.BCR.apps[name];
+  if (app) app.open(...a);
+  else msgBox('Blue Chat Room', 'That program is not installed on this server.', '⚠️');
 }
-function openFile(f) { if (f.kind === 'image') openImage(f); else if (f.kind === 'audio') openPlayer(f); else download(f); }
-function refreshExplorer() {
-  if (!expl.body) return;
-  const files = allFiles().reverse();
-  const rows = files.map(f => {
-    const tr = h('tr', { class: f.id === expl.sel ? 'sel' : '' },
-      h('td', null, kindIcon(f) + ' ' + f.name), h('td', null, f.kind === 'file' ? extOf(f.name).toUpperCase() + ' File' : f.kind === 'image' ? 'Image' : 'Audio'),
-      h('td', null, fmtSize(f.size)), h('td', null, f.from), h('td', null, fmtDate(f.time)));
-    tr.addEventListener('click', () => { expl.sel = f.id; refreshExplorer(); });
-    tr.addEventListener('dblclick', () => openFile(f));
-    return tr;
-  });
-  expl.body.replaceChildren(files.length
-    ? h('table', null, h('thead', null, h('tr', null, ['Name', 'Type', 'Size', 'Shared by', 'Date'].map(t => h('th', null, t)))), h('tbody', null, rows))
-    : h('div', { class: 'empty' }, 'No files have been shared yet. Attach something in the chat!'));
-  expl.status.firstChild.textContent = `${files.length} object(s)`;
+function openExplorer(...a) { openApp('explorer', ...a); }
+function refreshExplorer() { const a = window.BCR && window.BCR.apps.explorer; if (a && a.refresh) a.refresh(); }
+function openFile(f) {
+  if (f.kind === 'image') openImage(f);
+  else if (f.kind === 'audio') openPlayer(f);
+  else if (['zip', 'rar'].includes(extOf(f.name))) openApp('archive', f);
+  else download(f);
 }
 
 /* =====================================================================
    Windows Media Player 9 style player
    ===================================================================== */
-const wmp = { audio: null, ctx: null, an: null, data: null, cur: null, raf: 0, ui: null };
+const wmp = { audio: null, ctx: null, an: null, data: null, td: null, cur: null, raf: 0, ui: null, parts: [],
+  viz: (parseInt(store('bcr_viz'), 10) || 0) % 5 };
+const VIZ = ['Bars', 'Scope', 'Alchemy', 'Battery', 'Ambience'];
+function setViz(i) {
+  wmp.viz = (i + VIZ.length) % VIZ.length; wmp.parts = [];
+  store('bcr_viz', String(wmp.viz));
+  if (wmp.ui) wmp.ui.vizName.textContent = `${VIZ[wmp.viz]}  (${wmp.viz + 1}/${VIZ.length})`;
+}
 const playlist = () => allFiles().filter(f => f.kind === 'audio');
 
 function openPlayer(f) {
@@ -495,6 +541,10 @@ function buildPlayer() {
   const canvas = h('canvas');
   const title = h('div', { class: 'wmp-title' }, 'Windows Media Player');
   const msg = h('div', { class: 'wmp-msg' }, 'Choose a song from the chat or the playlist.');
+  const vizName = h('span', { class: 'wmp-vname' }, '');
+  const vizPrev = h('button', { class: 'wmp-vbtn', title: 'Previous visualization' }, '◀');
+  const vizNext = h('button', { class: 'wmp-vbtn', title: 'Next visualization' }, '▶');
+  const viznav = h('div', { class: 'wmp-viznav' }, vizPrev, vizName, vizNext);
   const listEl = h('div', { class: 'wmp-list' });
   const tabList = h('button', { class: 'wmp-tab on' }, 'Playlist');
   const seek = h('input', { type: 'range', min: '0', max: '1000', value: '0', step: '1', 'aria-label': 'Seek' });
@@ -509,7 +559,7 @@ function buildPlayer() {
 
   const content = h('div', { class: 'fill wmp' },
     h('div', { class: 'wmp-top' }, h('button', { class: 'wmp-tab on' }, 'Now Playing'), tabList, h('span', { class: 'wmp-brand' }, 'Windows Media Player')),
-    h('div', { class: 'wmp-main' }, h('div', { class: 'wmp-view' }, canvas, title, msg), listEl),
+    h('div', { class: 'wmp-main' }, h('div', { class: 'wmp-view' }, canvas, title, msg, viznav), listEl),
     h('div', { class: 'wmp-seek' }, seek),
     h('div', { class: 'wmp-ctrl' }, bStop, bPrev, bPlay, bNext, bMute, vol, lcd),
     status);
@@ -525,7 +575,7 @@ function buildPlayer() {
       Object.assign(wmp, { audio: null, ctx: null, an: null, data: null, cur: null, ui: null });
     },
   });
-  Object.assign(wmp, { audio, ctx: null, an: null, data: null, cur: null, ui: { title, msg, listEl, seek, bPlay, bMute, lcd, status, win, canvas } });
+  Object.assign(wmp, { audio, ctx: null, an: null, data: null, cur: null, ui: { title, msg, listEl, seek, bPlay, bMute, lcd, status, win, canvas, vizName } });
 
   let seeking = false;
   audio.volume = .8;
@@ -559,6 +609,10 @@ function buildPlayer() {
     setStatus('Cannot play this file');
   });
 
+  vizPrev.addEventListener('click', () => setViz(wmp.viz - 1));
+  vizNext.addEventListener('click', () => setViz(wmp.viz + 1));
+  canvas.addEventListener('click', () => setViz(wmp.viz + 1));
+  setViz(wmp.viz);
   cancelAnimationFrame(wmp.raf);
   drawViz();
   renderPlaylist();
@@ -575,7 +629,7 @@ function ensureAnalyser() {
     const an = ctx.createAnalyser();
     an.fftSize = 256; an.smoothingTimeConstant = .8;
     src.connect(an); an.connect(ctx.destination);
-    Object.assign(wmp, { ctx, an, data: new Uint8Array(an.frequencyBinCount) });
+    Object.assign(wmp, { ctx, an, data: new Uint8Array(an.frequencyBinCount), td: new Uint8Array(an.fftSize) });
   } catch (e) {}
 }
 function startAudio() {
@@ -613,6 +667,63 @@ function renderPlaylist() {
 }
 function refreshPlayerList() { renderPlaylist(); }
 
+const VIZ_DRAW = [
+  // 0 Bars
+  (g, W, H, fd) => {
+    const n = Math.max(16, Math.floor(W / 13)), bw = W / n;
+    for (let i = 0; i < n; i++) {
+      const v = fd[Math.floor(i / n * fd.length)], bh = Math.max(2, v * H * .86);
+      g.fillStyle = `hsl(${205 + v * 55},100%,${38 + v * 32}%)`; g.fillRect(i * bw + 1, H - bh, bw - 2, bh);
+      g.fillStyle = `hsla(${205 + v * 55},100%,60%,.18)`; g.fillRect(i * bw + 1, H - bh - 6, bw - 2, 4);
+    }
+  },
+  // 1 Scope (oscilloscope line)
+  (g, W, H, fd, td, bass) => {
+    g.lineWidth = 2; g.strokeStyle = `hsl(${180 + bass * 80},100%,65%)`; g.shadowColor = '#33ccff'; g.shadowBlur = 10;
+    g.beginPath();
+    for (let i = 0; i < td.length; i++) {
+      const x = i / (td.length - 1) * W, y = H / 2 + td[i] * H * .42;
+      if (i) g.lineTo(x, y); else g.moveTo(x, y);
+    }
+    g.stroke(); g.shadowBlur = 0;
+  },
+  // 2 Alchemy (rotating radial spectrum)
+  (g, W, H, fd, td, bass, t) => {
+    const cx = W / 2, cy = H / 2, m = Math.min(W, H), r0 = m * .18, n = fd.length;
+    g.lineWidth = 2;
+    for (let i = 0; i < n; i++) {
+      const a = i / n * Math.PI * 2 + t * .4, v = fd[i], r1 = r0 + v * m * .32;
+      g.strokeStyle = `hsl(${(i / n * 300 + t * 40) % 360},100%,${45 + v * 30}%)`;
+      g.beginPath(); g.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0); g.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1); g.stroke();
+    }
+    g.strokeStyle = `rgba(150,210,255,${.3 + bass * .6})`; g.beginPath(); g.arc(cx, cy, r0 * (.9 + bass * .2), 0, 7); g.stroke();
+  },
+  // 3 Battery (segmented LED columns, mirrored)
+  (g, W, H, fd) => {
+    const cols = Math.max(12, Math.floor(W / 18)), cw = W / cols, mid = H / 2, maxS = Math.max(1, Math.floor(mid / 10));
+    for (let i = 0; i < cols; i++) {
+      const s = Math.round(fd[Math.floor(i / cols * fd.length)] * maxS);
+      for (let j = 0; j < s; j++) {
+        g.fillStyle = `hsl(${130 - j / maxS * 130},100%,50%)`;
+        g.fillRect(i * cw + 2, mid - (j + 1) * 10, cw - 4, 7); g.fillRect(i * cw + 2, mid + j * 10 + 3, cw - 4, 7);
+      }
+    }
+  },
+  // 4 Ambience (bass-driven particles)
+  (g, W, H, fd, td, bass, t, playing) => {
+    const P = wmp.parts;
+    if ((playing && bass > .45 && Math.random() < .6) || (!playing && Math.random() < .04)) {
+      for (let k = 0; k < 3; k++) P.push({ x: W / 2, y: H / 2, vx: (Math.random() - .5) * (2 + bass * 8), vy: (Math.random() - .5) * (2 + bass * 8), r: 3 + Math.random() * 10 * (.5 + bass), l: 1, h: 190 + Math.random() * 80 });
+    }
+    for (let i = P.length - 1; i >= 0; i--) {
+      const p = P[i]; p.x += p.vx; p.y += p.vy; p.l -= .012;
+      if (p.l <= 0 || p.x < -20 || p.x > W + 20 || p.y < -20 || p.y > H + 20) { P.splice(i, 1); continue; }
+      g.fillStyle = `hsla(${p.h},100%,65%,${p.l * .6})`; g.beginPath(); g.arc(p.x, p.y, p.r * p.l + 1, 0, 7); g.fill();
+    }
+    if (P.length > 300) P.splice(0, P.length - 300);
+  },
+];
+
 function drawViz() {
   wmp.raf = requestAnimationFrame(drawViz);
   const ui = wmp.ui;
@@ -621,18 +732,19 @@ function drawViz() {
   if (!W || !H) return;
   if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
   const g = c.getContext('2d');
-  g.fillStyle = 'rgba(0,0,12,.3)'; g.fillRect(0, 0, W, H);
-  const playing = wmp.an && wmp.audio && !wmp.audio.paused;
-  if (playing) wmp.an.getByteFrequencyData(wmp.data);
-  const n = Math.max(16, Math.floor(W / 13)), bw = W / n, t = performance.now() / 1000;
-  for (let i = 0; i < n; i++) {
-    const v = playing ? wmp.data[Math.floor(i / n * wmp.data.length * .75)] / 255 : .05 + .035 * Math.sin(t * 2 + i * .45);
-    const bh = Math.max(2, v * H * .86);
-    g.fillStyle = `hsl(${205 + v * 55},100%,${38 + v * 32}%)`;
-    g.fillRect(i * bw + 1, H - bh, bw - 2, bh);
-    g.fillStyle = `hsla(${205 + v * 55},100%,60%,.18)`;
-    g.fillRect(i * bw + 1, H - bh - 6, bw - 2, 4);
+  const playing = !!(wmp.an && wmp.audio && !wmp.audio.paused);
+  const t = performance.now() / 1000, N = 96, M = 256, fd = new Array(N), td = new Array(M);
+  if (playing) {
+    wmp.an.getByteFrequencyData(wmp.data); wmp.an.getByteTimeDomainData(wmp.td);
+    for (let i = 0; i < N; i++) fd[i] = wmp.data[Math.floor(i / N * wmp.data.length * .75)] / 255;
+    for (let i = 0; i < M; i++) td[i] = (wmp.td[Math.floor(i / M * wmp.td.length)] - 128) / 128;
+  } else {
+    for (let i = 0; i < N; i++) fd[i] = .06 + .04 * Math.sin(t * 2 + i * .35);
+    for (let i = 0; i < M; i++) td[i] = .08 * Math.sin(t * 3 + i * .08);
   }
+  const bass = (fd[0] + fd[1] + fd[2] + fd[3] + fd[4]) / 5;
+  g.fillStyle = 'rgba(0,0,12,.28)'; g.fillRect(0, 0, W, H);
+  VIZ_DRAW[wmp.viz](g, W, H, fd, td, bass, t, playing);
 }
 
 /* =====================================================================
@@ -663,17 +775,19 @@ function updateStatus(online) {
 
 async function poll() {
   try {
-    const url = `${API}?action=fetch&since=${state.lastId}&cid=${state.cid}&name=${encodeURIComponent(state.name)}`;
+    const url = `${API}?action=fetch&since=${state.lastId}&cid=${state.cid}&name=${encodeURIComponent(state.name)}&ds=${state.dseq}`;
     const r = await fetch(url, { cache: 'no-store' });
     const d = await r.json();
     if (!d.ok) throw new Error('bad response');
     if (d.config) state.config = d.config;
-    if (d.last < state.lastId) {
-      state.messages = []; state.seen = new Set(); state.lastId = 0; state.loaded = false;
+    if (d.last < state.lastId || (d.dseq != null && d.dseq < state.dseq)) {
+      state.messages = []; state.seen = new Set(); state.lastId = 0; state.dseq = 0; state.loaded = false;
       if (chat.log) chat.log.replaceChildren();
       setTimeout(poll, 100); return;
     }
     ingest(d.messages);
+    if (d.dels && d.dels.length) applyDeletes(d.dels);
+    if (d.dseq != null) state.dseq = d.dseq;
     if (!state.loaded) { state.loaded = true; scrollDown(); }
     state.users = d.users; state.connected = true;
   } catch (e) {
@@ -691,6 +805,7 @@ function buildIcons() {
     { label: 'Blue Chat Room', glyph: '💬', open: openChat },
     { label: 'Shared Files', glyph: '📁', open: openExplorer },
     { label: 'Windows Media Player', glyph: '🎵', open: () => openPlayer() },
+    { label: 'Internet Explorer', glyph: '🌐', open: () => openApp('browser') },
   ];
   const icons = [];
   defs.forEach((d, i) => {
@@ -715,7 +830,8 @@ function setupStart() {
     if (!it) return;
     close();
     ({
-      chat: openChat, files: openExplorer, player: () => openPlayer(), nick: askName,
+      chat: openChat, files: () => openExplorer(), player: () => openPlayer(), nick: askName,
+      browser: () => openApp('browser'), wallpaper: () => openApp('wallpaper'),
       about: () => msgBox('About Blue Chat Room', 'Blue Chat Room - a shared chat for everyone who visits this page. Share images, music and files, and drag the windows wherever you like.', '💬'),
       logoff: () => { state.name = ''; store('bcr_name', ''); updateName(); askName(); },
     })[it.dataset.action]();
@@ -725,6 +841,9 @@ function setupStart() {
 function tickClock() { $('#clock').textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
 
 /* ---------- go ---------- */
+window.BCR = { h, $, clamp, extOf, fmtSize, fmtDate, fmtTime, store, state, wins, createWindow, closeWin, focusWin, restoreWin,
+  minimizeWin, msgBox, confirmBox, desktop, deskSize, fileUrl, download, allFiles, kindIcon, openImage, openPlayer, openChat,
+  openFile, askDelete, owns, apps: {} };
 buildIcons(); setupStart(); tickClock(); setInterval(tickClock, 10000); updateName();
 openChat();
 if (!state.name) askName();
